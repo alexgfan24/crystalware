@@ -15,27 +15,30 @@ import java.util.List;
 public final class Window {
 
     public List<ModuleButton> moduleButtons = new ArrayList<>();
-    public int x, y;
+
+    private int x, y;
     private final int width, height;
     private final Category category;
-    public boolean dragging, extended;
+
+    public boolean dragging = false;
+    public boolean extended = true;
+
     private int dragX, dragY;
 
-    private float renderX, renderY;
-    private float alpha = 0f;
+    private int prevX, prevY;
+    private Color currentColor;
 
     public ClickGui parent;
 
     public Window(int x, int y, int width, int height, Category category, ClickGui parent) {
         this.x = x;
         this.y = y;
-        this.renderX = x;
-        this.renderY = y;
+        this.prevX = x;
+        this.prevY = y;
         this.width = width;
         this.height = height;
         this.category = category;
         this.parent = parent;
-        this.extended = true;
 
         int offset = height + 4;
         for (Module module : Argon.INSTANCE.getModuleManager().getModulesInCategory(category)) {
@@ -46,63 +49,88 @@ public final class Window {
 
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         int targetAlpha = ClickGUI.alphaWindow.getValueInt();
-        alpha += (targetAlpha - alpha) * 0.12f;
 
-        renderX += (x - renderX) * 0.25f * delta;
-        renderY += (y - renderY) * 0.25f * delta;
+        if (currentColor == null)
+            currentColor = new Color(15, 15, 15, 0);
+        else
+            currentColor = new Color(15, 15, 15, currentColor.getAlpha());
 
-        Color background = new Color(18, 18, 18, (int) alpha);
-        Color headerTop = new Color(32, 32, 32, (int) alpha);
-        Color headerBottom = new Color(22, 22, 22, (int) alpha);
+        if (currentColor.getAlpha() != targetAlpha)
+            currentColor = ColorUtils.smoothAlphaTransition(0.1F, targetAlpha, currentColor);
+
+        // Smooth follow
+        prevX = (int) MathUtils.goodLerp(0.25f * delta, prevX, x);
+        prevY = (int) MathUtils.goodLerp(0.25f * delta, prevY, y);
 
         // Shadow
         RenderUtils.renderRoundedQuad(
                 context.getMatrices(),
-                new Color(0, 0, 0, 80),
-                renderX - 3, renderY - 3,
-                renderX + width + 3, renderY + height + 3,
-                10, 10, 0, 0, 50
+                new Color(0, 0, 0, 90),
+                prevX - 3, prevY - 3,
+                prevX + width + 3, prevY + height + 3,
+                ClickGUI.roundQuads.getValueInt(),
+                ClickGUI.roundQuads.getValueInt(),
+                0, 0, 50
         );
 
-        // Body
+        // Main window
         RenderUtils.renderRoundedQuad(
                 context.getMatrices(),
-                background,
-                renderX, renderY,
-                renderX + width, renderY + height,
-                10, 10, 0, 0, 50
+                currentColor,
+                prevX, prevY,
+                prevX + width, prevY + height,
+                ClickGUI.roundQuads.getValueInt(),
+                ClickGUI.roundQuads.getValueInt(),
+                0, 0, 50
         );
 
-        // Header
-        RenderUtils.renderVerticalGradient(
+        // Header accent
+        RenderUtils.renderQuadAbs(
                 context.getMatrices(),
-                renderX, renderY,
-                renderX + width, renderY + height,
-                headerTop.getRGB(),
-                headerBottom.getRGB()
+                prevX,
+                prevY + height - 2,
+                prevX + width,
+                prevY + height,
+                Utils.getMainColor(255, moduleButtons.isEmpty() ? 0 : moduleButtons.indexOf(moduleButtons.get(0))).getRGB()
         );
 
         // Title
-        int textX = (int) (renderX + width / 2f - TextRenderer.getWidth(category.name) / 2f);
+        int textWidth = TextRenderer.getWidth(category.name);
+        int textX = prevX + (width / 2) - (textWidth / 2);
         TextRenderer.drawString(
                 category.name,
                 context,
                 textX,
-                (int) renderY + 7,
+                prevY + 6,
                 Color.WHITE.getRGB()
         );
 
         updateButtons(delta);
 
         if (extended) {
-            for (ModuleButton moduleButton : moduleButtons)
-                moduleButton.render(context, mouseX, mouseY, delta);
+            for (ModuleButton button : moduleButtons) {
+                button.render(context, mouseX, mouseY, delta);
+            }
+        }
+    }
+
+    public void updateButtons(float delta) {
+        int offset = height + 4;
+
+        for (ModuleButton button : moduleButtons) {
+            button.animation.animate(
+                    0.45 * delta,
+                    button.extended ? height * (button.settings.size() + 1) : height
+            );
+
+            button.offset = offset;
+            offset += (int) button.animation.getValue();
         }
     }
 
     public void mouseClicked(double mouseX, double mouseY, int button) {
         if (isHovered(mouseX, mouseY)) {
-            if (button == 0 && !parent.isDraggingAlready()) {
+            if (button == 0 && !isDraggingAlready()) {
                 dragging = true;
                 dragX = (int) (mouseX - x);
                 dragY = (int) (mouseY - y);
@@ -110,29 +138,26 @@ public final class Window {
         }
 
         if (extended)
-            for (ModuleButton moduleButton : moduleButtons)
-                moduleButton.mouseClicked(mouseX, mouseY, button);
+            for (ModuleButton mb : moduleButtons)
+                mb.mouseClicked(mouseX, mouseY, button);
     }
 
     public void mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0) dragging = false;
+        if (button == 0)
+            dragging = false;
 
-        for (ModuleButton moduleButton : moduleButtons)
-            moduleButton.mouseReleased(mouseX, mouseY, button);
+        for (ModuleButton mb : moduleButtons)
+            mb.mouseReleased(mouseX, mouseY, button);
     }
 
-    public void updateButtons(float delta) {
-        int offset = height + 4;
+    public void mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (extended)
+            for (ModuleButton mb : moduleButtons)
+                mb.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
 
-        for (ModuleButton moduleButton : moduleButtons) {
-            moduleButton.animation.animate(
-                    0.45 * delta,
-                    moduleButton.extended ? height * (moduleButton.settings.size() + 1) : height
-            );
-
-            moduleButton.offset = offset;
-            offset += moduleButton.animation.getValue();
-        }
+    public void mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        y += (int) (verticalAmount * 20);
     }
 
     public void updatePosition(double mouseX, double mouseY, float delta) {
@@ -142,8 +167,41 @@ public final class Window {
         }
     }
 
+    public boolean isDraggingAlready() {
+        for (Window window : parent.windows)
+            if (window.dragging)
+                return true;
+        return false;
+    }
+
     public boolean isHovered(double mouseX, double mouseY) {
-        return mouseX > renderX && mouseX < renderX + width
-            && mouseY > renderY && mouseY < renderY + height;
+        return mouseX > prevX && mouseX < prevX + width
+            && mouseY > prevY && mouseY < prevY + height;
+    }
+
+    public void onGuiClose() {
+        currentColor = null;
+        dragging = false;
+
+        for (ModuleButton button : moduleButtons)
+            button.onGuiClose();
+    }
+
+    // ===== Getters (required by other components) =====
+
+    public int getX() {
+        return prevX;
+    }
+
+    public int getY() {
+        return prevY;
+    }
+
+    public int getWidth() {
+        return width;
+    }
+
+    public int getHeight() {
+        return height;
     }
 }
