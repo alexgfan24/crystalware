@@ -21,9 +21,9 @@ public final class ClickGUI extends Module implements PacketReceiveListener {
 
 	public static final NumberSetting alphaWindow = new NumberSetting(EncryptedString.of("Window Alpha"), 0, 255, 170, 1);
 
-	public static final BooleanSetting breathing = new BooleanSetting(EncryptedString.of("Breathing"), true)
+	public static final BooleanSetting breathing = new BooleanSetting(EncryptedString.of("Breathing"), false)
 			.setDescription(EncryptedString.of("Color breathing effect (only with rainbow off)"));
-	public static final BooleanSetting rainbow = new BooleanSetting(EncryptedString.of("Rainbow"), true)
+	public static final BooleanSetting rainbow = new BooleanSetting(EncryptedString.of("Rainbow"), false)
 			.setDescription(EncryptedString.of("Enables LGBTQ mode"));
 
 	public static final BooleanSetting background = new BooleanSetting(EncryptedString.of("Background"), false).setDescription(EncryptedString.of("Renders the background of the Click Gui"));
@@ -42,9 +42,9 @@ public final class ClickGUI extends Module implements PacketReceiveListener {
 	}
 
 	public ClickGUI() {
-		super(EncryptedString.of("Argon"),
+		super(EncryptedString.of("CrystalWare"),
 				EncryptedString.of("Settings for the client"),
-				GLFW.GLFW_KEY_RIGHT_SHIFT,
+				GLFW.GLFW_KEY_RIGHT_ALT,
 				Category.CLIENT);
 
 		addSettings(red, green, blue, alphaWindow, breathing, rainbow, background, preventClose, roundQuads, animationMode, antiAliasing);
