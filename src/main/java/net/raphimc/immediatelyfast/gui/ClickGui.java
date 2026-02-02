@@ -19,18 +19,29 @@ import static net.raphimc.immediatelyfast.Argon.mc;
 public final class ClickGui extends Screen {
 
     public List<Window> windows = new ArrayList<>();
-    private float backgroundAlpha = 0f;
+    public Color currentColor;
 
     public ClickGui() {
         super(Text.empty());
 
-        int startX = 60;
-        int centerY = mc.getWindow().getHeight() / 2 - 150;
-
+        int offsetX = 50;
         for (Category category : Category.values()) {
-            windows.add(new Window(startX, centerY, 220, 28, category, this));
-            startX += 240;
+            windows.add(new Window(offsetX, 50, 230, 30, category, this));
+            offsetX += 250;
         }
+    }
+
+    public boolean isDraggingAlready() {
+        for (Window window : windows)
+            if (window.dragging)
+                return true;
+        return false;
+    }
+
+    @Override
+    protected void setInitialFocus() {
+        if (client == null) return;
+        super.setInitialFocus();
     }
 
     @Override
@@ -40,21 +51,26 @@ public final class ClickGui extends Screen {
         if (Argon.INSTANCE.previousScreen != null)
             Argon.INSTANCE.previousScreen.render(context, 0, 0, delta);
 
-        float target = ClickGUI.background.getValue() ? 180f : 0f;
-        backgroundAlpha += (target - backgroundAlpha) * 0.12f;
+        if (currentColor == null)
+            currentColor = new Color(0, 0, 0, 0);
+        else
+            currentColor = new Color(0, 0, 0, currentColor.getAlpha());
 
-        Color bg = new Color(10, 10, 10, (int) backgroundAlpha);
+        int targetAlpha = ClickGUI.background.getValue() ? 200 : 0;
+
+        if (currentColor.getAlpha() != targetAlpha)
+            currentColor = ColorUtils.smoothAlphaTransition(0.08F, targetAlpha, currentColor);
 
         RenderUtils.renderQuadAbs(
                 context.getMatrices(),
                 0, 0,
                 mc.getWindow().getWidth(),
                 mc.getWindow().getHeight(),
-                bg.getRGB()
+                currentColor.getRGB()
         );
 
         RenderUtils.unscaledProjection();
-        float scale = (float) mc.getWindow().getScaleFactor();
+        float scale = (float) MinecraftClient.getInstance().getWindow().getScaleFactor();
         mouseX *= scale;
         mouseY *= scale;
 
@@ -67,8 +83,16 @@ public final class ClickGui extends Screen {
     }
 
     @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        for (Window window : windows)
+            window.keyPressed(keyCode, scanCode, modifiers);
+
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        float scale = (float) mc.getWindow().getScaleFactor();
+        float scale = (float) MinecraftClient.getInstance().getWindow().getScaleFactor();
         mouseX *= scale;
         mouseY *= scale;
 
@@ -80,7 +104,7 @@ public final class ClickGui extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        float scale = (float) mc.getWindow().getScaleFactor();
+        float scale = (float) MinecraftClient.getInstance().getWindow().getScaleFactor();
         mouseX *= scale;
         mouseY *= scale;
 
@@ -88,6 +112,29 @@ public final class ClickGui extends Screen {
             window.mouseReleased(mouseX, mouseY, button);
 
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        float scale = (float) MinecraftClient.getInstance().getWindow().getScaleFactor();
+        mouseX *= scale;
+        mouseY *= scale;
+
+        for (Window window : windows)
+            window.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        mouseY *= mc.getWindow().getScaleFactor();
+
+        for (Window window : windows)
+            window.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override
@@ -101,11 +148,16 @@ public final class ClickGui extends Screen {
                 .getModule(ClickGUI.class)
                 .setEnabledStatus(false);
 
+        onGuiClose();
         mc.setScreenAndRender(Argon.INSTANCE.previousScreen);
-        backgroundAlpha = 0f;
+    }
 
-        for (Window window : windows)
+    // ===== FIXED: REQUIRED METHOD =====
+    public void onGuiClose() {
+        currentColor = null;
+
+        for (Window window : windows) {
             window.onGuiClose();
+        }
     }
 }
-
